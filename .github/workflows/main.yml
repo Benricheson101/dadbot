@@ -28,7 +28,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}-test:latest
+          tags: ghcr.io/alekeagle/dadbot-test:latest
       - name: Deploy to Kubernetes
         uses: fjogeleit/http-request-action@v1.5.0
         with:
