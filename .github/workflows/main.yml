@@ -19,7 +19,7 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ghcr.io
-          username: alekeagle
+          username: AlekEagle
           password: ${{ secrets.PAT }}
       - name: Build and push
         uses: docker/build-push-action@v2
@@ -27,10 +27,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/alekeagle/dadbot:latest
-      - name: Deploy to Kubernetes
-        uses: fjogeleit/http-request-action@v1.5.0
-        with:
-          url: 'https://kubeapi.eli.tf/restart/deployment/${{ secrets.DEPLOYMENT_NAME }}'
-          method: GET
-          bearerToken: ${{ secrets.API_TOKEN }}
+          tags: ghcr.io/AlekEagle/dadbot:latest
