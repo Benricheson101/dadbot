@@ -27,4 +27,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/AlekEagle/dadbot:latest
+          tags: ghcr.io/alekeagle/dadbot:latest
