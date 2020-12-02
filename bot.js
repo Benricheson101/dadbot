@@ -41,61 +41,27 @@ require('./functions/logger')('LOG');
 
 // grafana.on('error', (err) => console.error(err));
 
-process.on('SIGINT', () => {
+process.on('SIGINT', handleExit);
+
+process.on('SIGTERM', handleExit);
+
+function handleExit() {
   client.disconnect();
   // grafana.disconnect();
-  process.exit();
-});
-
-setTimeout(() => {
-  if (!process.env.DEBUG) {
-    fetch('https://discord.com/api/v6/gateway/bot', {
-      method: 'GET',
-      headers: {
-        Authorization: 'Bot ' + process.env.token,
-      },
-    })
-      .then((response) => response.json())
-      .then((json) => {
-        // console.debug(json);
-        // process.env.totalShards = json.shards;
-        // process.env.firstShardId =
-        //   Math.floor(process.env.totalShards / Number(process.env.instances)) *
-        //   process.env.NODE_APP_INSTANCE;
-
-        process.env.lastShardId =
-          process.env.NODE_APP_INSTANCE == Number(process.env.instances) - 1
-            ? process.env.totalShards - 1
-            : Math.abs(
-                Number(process.env.firstShardId) +
-                  Math.floor(
-                    process.env.totalShards / Number(process.env.instances)
-                  )
-              ) - 1;
-        console.debug(process.env.firstShardId, process.env.lastShardId);
-        console.debug('Initialized, calling startup sequence...');
-        startupSequence();
-      });
-  } else {
-    // process.env.totalShards = Number(process.env.instances);
-    // process.env.firstShardId =
-    //   Math.floor(process.env.totalShards / Number(process.env.instances)) *
-    //   process.env.NODE_APP_INSTANCE;
-
-    // process.env.lastShardId =
-    //   process.env.NODE_APP_INSTANCE == Number(process.env.instances) - 1
-    //     ? process.env.totalShards - 1
-    //     : Math.abs(
-    //         Number(process.env.firstShardId) +
-    //           Math.floor(
-    //             process.env.totalShards / Number(process.env.instances)
-    //           )
-    //       ) - 1;
-    console.debug(process.env.firstShardId, process.env.lastShardId);
-    console.debug('Initialized, calling startup sequence...');
-    startupSequence();
-  }
-}, 5000 * process.env.NODE_APP_INSTANCE);
+  console.log('SIGTERM CALL');
+  if (process.env.DEBUG)
+    fetch(
+      'https://dadbot-lifecycle-controller.eli.tf/podstop?shard=' +
+        process.env.shard
+    ).then((resp) => {
+      console.log(
+        resp.status == 200
+          ? 'Successfully sent termination signal to lifecycle controller'
+          : 'Error sending termination signal to lifecycle controller'
+      );
+      process.exit();
+    });
+}
 
 // function clusterStatusUpdate(connected) {
 //   if (connected) {
@@ -144,18 +110,49 @@ setTimeout(() => {
 //       : evaluation
 //   );
 // });
+fetch('https://dadbot-lifecycle-controller.eli.tf/pods')
+  .then((resp) => resp.json())
+  .then((pods) => {
+    console.log(pods);
+    // move following line to prod startup after debug
+    process.env.totalShards = pods.pods.length;
 
-if (process.env.DEBUG) {
-  console.logLevel = 'DEBUG';
-  console.log('DEBUG MODE');
-}
+    if (process.env.DEBUG) {
+      console.logLevel = 'DEBUG';
+      console.log('DEBUG MODE');
+
+      // Remove following line after
+      fetch('https://dadbot-lifecycle-controller.eli.tf/podstart')
+        .then((resp) => resp.json())
+        .then((json) => {
+          console.log(json);
+          if (json.shard == null) {
+            console.error('NO SHARDS GIVEN');
+            process.exit(1);
+          }
+          process.env.shard = json.shard;
+          startupSequence();
+        });
+
+      // process.env.shard = 0;
+      // startupSequence();
+      // process.env.totalShards = 1;
+    } else {
+      fetch('https://dadbot-lifecycle-controller.eli.tf/podstart')
+        .then((resp) => resp.json())
+        .then((json) => {
+          if (json.shard == null) {
+            console.error('NO SHARDS GIVEN');
+            process.exit(1);
+          }
+          process.env.shard = json.shard;
+          startupSequence();
+        });
+    }
+  });
 
 function startupSequence() {
-  console.log(
-    'first shard',
-    process.env.firstShardId,
-    typeof process.env.firstShardId
-  );
+  console.log('Shard', process.env.shard, 'starting');
   // console.log(
   //   /*`Cluster: ${Number(process.env.NODE_APP_INSTANCE) + 1}   Clusters: ${Number(
   //     process.env.instances
@@ -169,8 +166,8 @@ function startupSequence() {
   client = new CommandClient(
     process.env.DEBUG ? process.env.otherToken : process.env.token,
     {
-      firstShardID: Number(process.env.firstShardId),
-      lastShardID: Number(process.env.lastShardId),
+      firstShardID: Number(process.env.shard),
+      lastShardID: Number(process.env.shard),
       maxShards: Number(process.env.totalShards),
       getAllUsers: false,
       messageLimit: 0,
@@ -335,6 +332,10 @@ function startupSequence() {
 
   client.on('ready', () => {
     console.log('Connected.');
+    fetch(
+      'https://dadbot-lifecycle-controller.eli.tf/podstarted?shard=' +
+        process.env.shard
+    );
     client.editStatus('online', {
       type: 0,
       name: `Dad Bot: Docker edition`,
@@ -378,14 +379,15 @@ function startupSequence() {
 }
 
 function updateShardCount(snum, client) {
-  var avail = client.options.lastShardID - (client.options.firstShardID - 1);
-  console.log(
-    `Shard Status: ${
-      Math.round(
-        ((snum - client.options.firstShardID + 1 || 0) / avail) * 100
-      ) || 0
-    }% [${snum - client.options.firstShardID + 1 || 0}/${avail}]`
-  );
+  console.log(snum);
+  // var avail = client.options.lastShardID - (client.options.firstShardID - 1);
+  // console.log(
+  //   `Shard Status: ${
+  //     Math.round(
+  //       ((snum - client.options.firstShardID + 1 || 0) / avail) * 100
+  //     ) || 0
+  //   }% [${snum - client.options.firstShardID + 1 || 0}/${avail}]`
+  // );
 }
 
 process.on('uncaughtException', function (exception) {

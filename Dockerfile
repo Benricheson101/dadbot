@@ -1,5 +1,9 @@
 FROM node:alpine
 
+RUN apk add --no-cache tini
+# Tini is now available at /sbin/tini
+ENTRYPOINT ["/sbin/tini", "--"]
+
 WORKDIR /usr/src/app
 
 COPY package*.json ./
